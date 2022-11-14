@@ -1,0 +1,25 @@
+.display-current-word {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+
+  .letter {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 50px;
+    height: 50px;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #333;
+    background-color: #1e1e1e;
+    border-radius: 10px;
+
+    &.correct {
+      background: #333;
+      color: #fff;
+    }
+  }
+}
