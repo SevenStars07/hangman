@@ -16,10 +16,7 @@ export const Keyboard = (props: KeyboardProps) => {
     const target = e.target as HTMLDivElement;
     if (target.classList.contains("pressed")) return;
 
-    console.log(target.id);
     target.classList.add("pressed");
-    // target.onclick = () => { return null; };
-
 
     setPressedKeys((prev: string[]) => {
       return [...prev, target.id];

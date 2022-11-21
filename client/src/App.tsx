@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import removeAccents from "remove-accents";
 
 import "./App.scss";
-import { DisplayCurrentWord } from './DisplayCurrentWord';
-import { DisplayTries } from './DisplayTries';
+import { DisplayCurrentWord } from "./DisplayCurrentWord";
+import { DisplayTries } from "./DisplayTries";
 import { Keyboard } from "./Keyboard";
 
 enum Language {
@@ -13,18 +14,37 @@ enum Language {
 const maxGuesses = 6;
 
 function App() {
-  const [language, setLanguage] = useState<Language>(Language.English);
+  const [language, setLanguage] = useState<Language>(
+    (localStorage.getItem("language") as Language) || Language.English
+  );
   const [word, setWord] = useState("");
+  const [normalisedWord, setNormalisedWord] = useState("");
   const [isRequestLoading, setIsRequestLoading] = useState(false);
 
   const [pressedKeys, setPressedKeys] = useState<string[]>([]);
 
+  const numberOfBadGuesses = useMemo(() => {
+    return pressedKeys.filter((key) => !word.includes(key)).length;
+  }, [pressedKeys, word]);
+
   const isGameOver = useMemo(() => {
-    return pressedKeys.length >= maxGuesses;
-  }, [pressedKeys]);
+    return (
+      numberOfBadGuesses >= maxGuesses &&
+      !normalisedWord.split("").every((letter) => pressedKeys.includes(letter))
+    );
+  }, [normalisedWord, numberOfBadGuesses, pressedKeys]);
+
+  const isGameWon = useMemo(() => {
+    return normalisedWord
+      .split("")
+      .every((letter) => pressedKeys.includes(letter));
+  }, [normalisedWord, pressedKeys]);
 
   const onLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setLanguage(e.target.value as Language);
+    const lang = e.target.value as Language;
+
+    localStorage.setItem("language", lang);
+    setLanguage(lang);
   };
 
   const loadCurrentWord = useCallback(async (language: Language) => {
@@ -34,52 +54,81 @@ function App() {
       `http://localhost:5000/word?language=${language}`
     );
     const data = await response.json();
+    const normalised = removeAccents(data.word);
+    setNormalisedWord(normalised);
     setWord(data.word);
     setIsRequestLoading(false);
   }, []);
 
   useEffect(() => {
+    console.log("language changed", language);
     loadCurrentWord(language);
   }, [language, loadCurrentWord]);
+
+  const submitHighScore = useCallback(async () => {
+    const name = prompt("Please enter your name");
+    if (!name) return;
+  }, []);
+
+  useEffect(() => {
+    const isGameWon = normalisedWord
+      .split("")
+      .every((letter) => pressedKeys.includes(letter));
+
+    if (!isGameWon) return;
+
+    submitHighScore();
+  }, [normalisedWord, pressedKeys, submitHighScore]);
 
   return (
     <div className="App">
       <div className="header">
-        <select onChange={onLanguageChange}>
-          <option
-            selected={language === Language.English}
-            value={Language.English}
-          >
-            English
-          </option>
-          <option
-            selected={language === Language.Romanian}
-            value={Language.Romanian}
-          >
-            Romanian
-          </option>
+        <select onChange={onLanguageChange} value={language}>
+          <option value={Language.English}>English</option>
+          <option value={Language.Romanian}>Romanian</option>
         </select>
       </div>
       <div className="body">
         {isRequestLoading ? (
           <div className="loading">Loading...</div>
         ) : (
-            // isGameOver ? (
-            //   <div className="game-over">
-            //     <div className="game-over-text">Game Over</div>
-            //     <button onClick={() => loadCurrentWord(language)}>
-            //       Play Again
-            //     </button>
-            //   </div>
-            // ) : (
+          <>
+            <DisplayTries numberOfBadGuesses={numberOfBadGuesses} />
+            {isGameOver ? (
               <>
-                <DisplayTries pressedKeys={pressedKeys} />
-                <DisplayCurrentWord currentWord={word} pressedKeys={pressedKeys} />
-                <Keyboard setPressedKeys={setPressedKeys} />
+                <div className="game-over">Game over!</div>
+                <button onClick={() => loadCurrentWord(language)}>
+                  Play again
+                </button>
               </>
-            )
-        // )
-        }
+            ) : (
+              <>
+                {isGameWon ? (
+                  <>
+                    <div className="game-won">You won!</div>
+                    <DisplayCurrentWord
+                      currentWord={word}
+                      normalisedWord={normalisedWord}
+                      pressedKeys={pressedKeys}
+                    />
+                    <button onClick={() => loadCurrentWord(language)}>
+                      Play again
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <DisplayCurrentWord
+                      currentWord={word}
+                      normalisedWord={normalisedWord}
+                      pressedKeys={pressedKeys}
+                    />
+                    <Keyboard setPressedKeys={setPressedKeys} />
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

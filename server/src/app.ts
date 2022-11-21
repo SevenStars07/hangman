@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import axios from "axios";
 import cors from "cors";
 import removeAccents from "remove-accents";
+import { workerData } from "worker_threads";
 
 dotenv.config();
 
@@ -11,8 +12,8 @@ const uri = process.env.CONNECTION_STRING;
 
 const apiUrls = {
   en: "https://random-word-api.herokuapp.com/word?number=1",
-  ro: "https://dexonline.ro/static/download/word-list-hangman-1.txt"
-}
+  ro: "https://dexonline.ro/static/download/word-list-hangman-1.txt",
+};
 
 const getEnglishWord = async (): Promise<string> => {
   const response = await axios.get(apiUrls.en);
@@ -24,7 +25,7 @@ const getRomanianWord = async (): Promise<string> => {
   const words = response.data.split("\n");
 
   return words[Math.floor(Math.random() * words.length)];
-}; 
+};
 
 const getWord = async (language?: string): Promise<string> => {
   switch (language) {
@@ -35,7 +36,7 @@ const getWord = async (language?: string): Promise<string> => {
     default:
       return await getEnglishWord();
   }
-}
+};
 
 main().catch((err) => console.log(err));
 
@@ -47,6 +48,7 @@ async function main() {
 
   const highScoreSchema = new mongoose.Schema({
     name: String,
+    word: String,
     score: Number,
   });
 
@@ -69,15 +71,31 @@ async function main() {
     const ms = Date.now() - start;
     console.log(`${req.method} ${req.path} - ${ms}ms`);
   });
-  
+
   app.post("/highscore", async (req: Request, res: Response) => {
-    if (!req.body.name || !req.body.score) {
-      res.status(400).json({ message: "Missing name or score" });
+    if (!req.body.name || !req.body.word || !req.body.tries) {
+      res.status(400).json({ message: "Missing name, word or score" });
+      return;
+    }
+    const { name, word, tries } = req.body;
+
+    const distinctLetters = new Set<string>(word.split(""));
+
+    if (tries < distinctLetters.size || tries > word.length + 6) {
+      res.status(400).json({ message: "Invalid score" });
       return;
     }
 
-    const highScore = new HighScore({ name: req.body.name, score: req.body.score });
-    
+    const scoreInPercent = Math.round(
+      ((word.length - tries) / word.length) * 100
+    );
+
+    const highScore = new HighScore({
+      name: name,
+      word: word,
+      score: scoreInPercent,
+    });
+
     await highScore.save();
 
     res.json(highScore);
@@ -98,10 +116,8 @@ async function main() {
   app.get("/word", async (req: Request, res: Response) => {
     const language = req.query.language as string;
     const word = await getWord(language);
-
-    const cleanWord = removeAccents(word);
-    console.log(cleanWord);
-    res.json({ word: cleanWord });
+    console.log(word);
+    res.json({ word: word });
   });
 
   app.listen(port, () => {
